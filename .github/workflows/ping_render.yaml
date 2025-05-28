@@ -1,10 +1,10 @@
 # .github/workflows/ping_render.yaml
 name: Ping Render Apps
 
-on:
-  schedule:
-    - cron: '*/15 * * * *'  # every 15 minutes, all day, every day (UTC)
-  workflow_dispatch:  # allows manual triggering from GitHub UI
+# on:
+#   schedule:
+#     - cron: '*/15 * * * *'  # every 15 minutes, all day, every day (UTC)
+#   workflow_dispatch:  # allows manual triggering from GitHub UI
 
 jobs:
   ping:
