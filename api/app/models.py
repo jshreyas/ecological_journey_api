@@ -1,6 +1,6 @@
 # app/models.py
 from pydantic import BaseModel, Field
-from typing import List, Optional, Literal
+from typing import List, Optional, Literal, Dict
 from bson import ObjectId
 from .auth_models import PyObjectId
 from uuid import uuid4
@@ -41,12 +41,26 @@ class Playlist(BaseModel):
     id: Optional[PyObjectId] = Field(default_factory=PyObjectId, alias="_id")
     name: str
     video_ids: List[str] = []
-    owner_type: Literal["user", "team"] = "user"
     owner_id: Optional[PyObjectId] = None  # will be filled in route if not provided
     team_id: Optional[PyObjectId] = None
     playlist_id: Optional[str] = None
 
     class Config:
         validate_by_name = True
+        arbitrary_types_allowed = True
+        json_encoders = {ObjectId: str}
+
+
+class Cliplist(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid4()), alias="_id")
+    name: str
+    filters: Optional[Dict] = None  # can include labels, partners, type, date ranges
+    clip_ids: Optional[List[str]] = []  # optional list of clips for manual or snapshot
+    ordered: bool = True  # for swipeable/reel mode
+    owner_id: Optional[PyObjectId] = None
+    team_id: Optional[PyObjectId] = None
+
+    class Config:
+        populate_by_name = True
         arbitrary_types_allowed = True
         json_encoders = {ObjectId: str}

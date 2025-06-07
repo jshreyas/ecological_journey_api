@@ -42,8 +42,7 @@ def create_playlist(token, name="Grappling Journal"): #TODO: dynamically pull th
     url = f"{BASE_URL}/playlists"
     headers = {"Authorization": f"Bearer {token}"}
     data = {
-        "name": name,
-        "owner_type": "user"
+        "name": name
     }
     response = requests.post(url, json=data, headers=headers)
     print("Create Playlist:", response.status_code, response.json())
@@ -111,6 +110,6 @@ def main():
     for video in parsed_videos:
         upload_video_to_playlist(token, playlist_name, video)
 
-
+#TODO: removed this, also check this file if its working as expected with all the changes
 if __name__ == "__main__":
     main()

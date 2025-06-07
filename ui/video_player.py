@@ -1,7 +1,6 @@
 from nicegui import ui, app
 from urllib.parse import urlparse, parse_qs
 
-
 class VideoPlayer:
 
     def __init__(
@@ -13,7 +12,8 @@ class VideoPlayer:
         show_speed_slider: bool = True,
         width: int = 700,
         height: int = 400,
-        on_end=None,  # <-- Add this argument
+        on_end=None,
+        parent=None,  # 👈 NEW
     ):
         self.video_id = self._extract_video_id(video_url)
         self.start = start
@@ -22,7 +22,8 @@ class VideoPlayer:
         self.show_speed_slider = show_speed_slider
         self.width = width
         self.height = height
-        self.on_end = on_end  # <-- Store callback
+        self.on_end = on_end
+        self.parent = parent
         self._render()
 
     def _extract_video_id(self, url: str) -> str:
@@ -35,112 +36,116 @@ class VideoPlayer:
         else:
             return url  # assume it's already a video ID
 
+
     def _render(self):
-        # Create a unique element id for this player instance
         import uuid
         self.element_id = f"yt-player-{uuid.uuid4().hex[:8]}"
-        ui.html(f'''
-            <div id="yt-player-wrapper">
-                <div id="{self.element_id}"></div>
-            </div>
-        ''')
 
-        ui.add_head_html('''
-            <script src="https://www.youtube.com/iframe_api"></script>
-        ''')
+        # 👇 Everything below happens in the right container
+        context = self.parent if self.parent else ui
+        with context:
 
-        # --- NiceGUI 2.x: use app.post for callback endpoint ---
-        if self.on_end:
-            endpoint = f"/_nicegui_api/{self.element_id}_on_end"
-            @app.post(endpoint)
-            async def _on_end_event():
-                if callable(self.on_end):
-                    self.on_end()
-                return {'status': 'ok'}
+            ui.html(f'''
+                <div id="yt-player-wrapper" style="top: 0; left: 0; width: 100%; height: 100%; padding-bottom: 56.25%; overflow: hidden;">
+                    <div id="{self.element_id}" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; overflow: hidden;"></div>
+                </div>
+            ''')
 
-        # JS: call Python endpoint when video/clip ends
-        js_on_end = f"""
-            fetch('/_nicegui_api/{self.element_id}_on_end', {{method: 'POST'}});
-        """ if self.on_end else ""
+            ui.add_head_html('''
+                <script src="https://www.youtube.com/iframe_api"></script>
+            ''')
 
-        ui.run_javascript(f'''
-            window.ytConfig = {{
-                videoId: "{self.video_id}",
-                start: {self.start},
-                end: {self.end},
-                speed: {self.speed}
-            }};
+            if self.on_end:
+                endpoint = f"/_nicegui_api/{self.element_id}_on_end"
+                @app.post(endpoint)
+                async def _on_end_event():
+                    if callable(self.on_end):
+                        self.on_end()
+                    return {'status': 'ok'}
 
-            let ytPlayer;
-            let ytEndInterval;
+            js_on_end = f"""
+                fetch('/_nicegui_api/{self.element_id}_on_end', {{method: 'POST'}});
+            """ if self.on_end else ""
 
-            window.onYouTubeIframeAPIReady = function() {{
-                ytPlayer = new YT.Player('{self.element_id}', {{
-                    height: '{self.height}',
-                    width: '{self.width}',
-                    videoId: window.ytConfig.videoId,
-                    playerVars: {{
-                        autoplay: 1,
-                        start: window.ytConfig.start
-                    }},
-                    events: {{
-                        'onReady': onPlayerReady,
-                        'onStateChange': onPlayerStateChange
-                    }}
-                }});
-            }};
+            ui.run_javascript(f'''
+                window.ytConfig = {{
+                    videoId: "{self.video_id}",
+                    start: {self.start},
+                    end: {self.end},
+                    speed: {self.speed}
+                }};
 
-            function onPlayerReady(event) {{
-                event.target.setPlaybackRate(window.ytConfig.speed);
-                event.target.playVideo();
-                if (ytEndInterval) clearInterval(ytEndInterval);
-                ytEndInterval = setInterval(() => {{
-                    const current = ytPlayer.getCurrentTime();
-                    if (current >= window.ytConfig.end) {{
-                        ytPlayer.pauseVideo();
-                        clearInterval(ytEndInterval);
-                        {js_on_end}
-                    }}
-                }}, 500);
-            }}
+                let ytPlayer;
+                let ytEndInterval;
 
-            function onPlayerStateChange(event) {{}}
+                window.onYouTubeIframeAPIReady = function() {{
+                    ytPlayer = new YT.Player('{self.element_id}', {{
+                        height: '100%',
+                        width: '100%',
+                        videoId: window.ytConfig.videoId,
+                        playerVars: {{
+                            autoplay: 1,
+                            start: window.ytConfig.start
+                        }},
+                        events: {{
+                            'onReady': onPlayerReady,
+                            'onStateChange': onPlayerStateChange
+                        }}
+                    }});
+                }};
 
-            window.setYTClip = function(start, end) {{
-                window.ytConfig.start = start;
-                window.ytConfig.end = end;
-                ytPlayer.seekTo(start, true);
-                ytPlayer.playVideo();
-                if (ytEndInterval) clearInterval(ytEndInterval);
-                ytEndInterval = setInterval(() => {{
-                    const current = ytPlayer.getCurrentTime();
-                    if (current >= window.ytConfig.end) {{
-                        ytPlayer.pauseVideo();
-                        clearInterval(ytEndInterval);
-                        {js_on_end}
-                    }}
-                }}, 500);
-            }};
-
-            window.setYTSpeed = function(speed) {{
-                window.ytConfig.speed = speed;
-                if (ytPlayer && ytPlayer.setPlaybackRate) {{
-                    ytPlayer.setPlaybackRate(speed);
+                function onPlayerReady(event) {{
+                    event.target.setPlaybackRate(window.ytConfig.speed);
+                    event.target.playVideo();
+                    if (ytEndInterval) clearInterval(ytEndInterval);
+                    ytEndInterval = setInterval(() => {{
+                        const current = ytPlayer.getCurrentTime();
+                        if (current >= window.ytConfig.end) {{
+                            ytPlayer.pauseVideo();
+                            clearInterval(ytEndInterval);
+                            {js_on_end}
+                        }}
+                    }}, 500);
                 }}
-            }};
 
-            if (window.YT && window.YT.Player) {{
-                window.onYouTubeIframeAPIReady();
-            }}
-        ''')
+                function onPlayerStateChange(event) {{}}
 
-        if self.show_speed_slider:
-            def on_speed_change(_):
-                self.speed = speed_knob.value
-                ui.run_javascript(f"window.setYTSpeed({speed_knob.value});")
-            with ui.row().classes('items-center gap-2'):
-                speed_knob = ui.knob(
-                    min=0.25, max=2.0, step=0.25, value=self.speed,
-                    track_color='grey-2', show_value=True
-                ).props('size=60').on('change', on_speed_change)
-                ui.label('Speed').classes('ml-2 text-xs text-gray-500')
+                window.setYTClip = function(start, end) {{
+                    window.ytConfig.start = start;
+                    window.ytConfig.end = end;
+                    ytPlayer.seekTo(start, true);
+                    ytPlayer.playVideo();
+                    if (ytEndInterval) clearInterval(ytEndInterval);
+                    ytEndInterval = setInterval(() => {{
+                        const current = ytPlayer.getCurrentTime();
+                        if (current >= window.ytConfig.end) {{
+                            ytPlayer.pauseVideo();
+                            clearInterval(ytEndInterval);
+                            {js_on_end}
+                        }}
+                    }}, 500);
+                }};
+
+                window.setYTSpeed = function(speed) {{
+                    window.ytConfig.speed = speed;
+                    if (ytPlayer && ytPlayer.setPlaybackRate) {{
+                        ytPlayer.setPlaybackRate(speed);
+                    }}
+                }};
+
+                if (window.YT && window.YT.Player) {{
+                    window.onYouTubeIframeAPIReady();
+                }}
+            ''')
+
+            if self.show_speed_slider:
+                def on_speed_change(_):
+                    self.speed = speed_knob.value
+                    ui.run_javascript(f"window.setYTSpeed({speed_knob.value});")
+
+                with ui.row().classes('items-center gap-2'):
+                    speed_knob = ui.knob(
+                        min=0.25, max=2.0, step=0.25, value=self.speed,
+                        track_color='grey-2', show_value=True
+                    ).props('size=60').on('change', on_speed_change)
+                    ui.label('Speed').classes('ml-2 text-xs text-gray-500')

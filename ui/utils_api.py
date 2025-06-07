@@ -389,3 +389,22 @@ def save_video_metadata(video_metadata: dict, token: str) -> bool:
     except Exception as e:
         print(f"Failed to save video metadata: {e}")
         return False
+
+def load_cliplist(cliplist_id: str=None):
+    if not cliplist_id:
+        return api_get("/cliplists")
+    return api_get(f"/cliplist/{cliplist_id}")
+
+def save_cliplist(name, filters_state, token):
+    data = {
+        "name": name,
+        "filters": filters_state,
+        # "clip_ids": filtered_clips
+    }
+    import pdb; pdb.set_trace()  # Debugging breakpoint
+    try:
+        response = api_post("/cliplist", data=data, token=token)
+        return response
+    except requests.HTTPError as e:
+        print(f"Failed to save cliplist: {e}")
+        return None
